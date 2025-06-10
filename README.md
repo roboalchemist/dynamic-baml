@@ -491,7 +491,3 @@ data = call_with_schema(
 - ✅ **Error Handling**: Comprehensive error management
 - ✅ **Multi-Provider**: Easy provider switching
 - ✅ **Complex Types**: Enums, nested objects, arrays
-
----
-
-**Made with ❤️ by the Dynamic BAML Team** 
