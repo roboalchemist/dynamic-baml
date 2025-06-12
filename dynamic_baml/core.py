@@ -49,7 +49,7 @@ def call_with_schema(
         DynamicBAMLError: For any errors during processing
     """
     if options is None:
-        options = {"provider": "ollama", "model": "gemma3:1b"}
+        options = {"provider": "ollama", "model": "gemma2:2b"}
     
     try:
         # Generate unique schema name
@@ -72,7 +72,7 @@ def call_with_schema(
         full_baml_code = baml_code + "\n\n" + baml_function
         
         # Step 3: Create temporary BAML project and generate client
-        with _temporary_baml_project(full_baml_code, function_name) as (project_dir, client_module):
+        with _temporary_baml_project(full_baml_code, function_name, options) as (project_dir, client_module):
             # Step 4: Call the generated function
             extract_function = getattr(client_module.b, function_name)
             result = extract_function(input_text=prompt_text)
@@ -133,14 +133,16 @@ def _get_client_config(options: ProviderOptions) -> str:
     provider = options.get("provider", "ollama").lower()
     
     if provider == "ollama":
-        return "MyOllama"
+        return "Ollama"
     elif provider == "openai":
-        return "MyOpenAI"
+        return "OpenAI"
     elif provider == "anthropic":
-        return "MyAnthropic"
+        return "Anthropic"
+    elif provider == "openrouter":
+        return "OpenRouter"
     else:
         # Default to Ollama
-        return "MyOllama"
+        return "Ollama"
 
 
 def _generate_baml_function(function_name: str, schema_name: str, client_config: str, prompt_text: str) -> str:
@@ -165,9 +167,10 @@ function {function_name}(input_text: string) -> {schema_name} {{
 class _TemporaryBAMLProject:
     """Context manager for temporary BAML projects."""
     
-    def __init__(self, baml_code: str, function_name: str):
+    def __init__(self, baml_code: str, function_name: str, options: Optional[ProviderOptions] = None):
         self.baml_code = baml_code
         self.function_name = function_name
+        self.options = options or {"provider": "ollama", "model": "gemma3:1b"}
         self.project_dir = None
         self.client_module = None
     
@@ -194,32 +197,54 @@ generator target {
 '''
             (baml_src_dir / "generators.baml").write_text(generators_content)
             
-            # Write clients.baml (basic client configurations)
-            clients_content = '''
-client<llm> MyOllama {
+            # Write clients.baml with dynamic model configuration
+            # Get the model from options, with provider-specific defaults
+            provider = self.options.get("provider", "ollama").lower()
+            if provider == "openai":
+                model = self.options.get("model", "gpt-4o")
+            elif provider == "anthropic":
+                model = self.options.get("model", "claude-3-5-sonnet-20241022") 
+            elif provider == "ollama":
+                model = self.options.get("model", "gemma3:1b")
+            elif provider == "openrouter":
+                model = self.options.get("model", "google/gemini-2.0-flash-exp")
+            else:
+                model = self.options.get("model", "gemma3:1b")
+            
+            clients_content = f'''
+client<llm> Ollama {{
   provider openai-generic
-  options {
-    model "gemma3:1b"
+  options {{
+    model "{self.options.get("model", "gemma3:1b") if provider == "ollama" else "gemma3:1b"}"
     base_url "http://localhost:11434/v1"
     api_key "dummy"
-  }
-}
+  }}
+}}
 
-client<llm> MyOpenAI {
+client<llm> OpenAI {{
   provider openai
-  options {
-    model "gpt-4o"
+  options {{
+    model "{model if provider == "openai" else "gpt-4o"}"
     api_key env.OPENAI_API_KEY
-  }
-}
+  }}
+}}
 
-client<llm> MyAnthropic {
+client<llm> Anthropic {{
   provider anthropic
-  options {
-    model "claude-3-5-sonnet-20241022"
+  options {{
+    model "{model if provider == "anthropic" else "claude-3-5-sonnet-20241022"}"
     api_key env.ANTHROPIC_API_KEY
-  }
-}
+  }}
+}}
+
+client<llm> OpenRouter {{
+  provider openai-generic
+  options {{
+    model "{model if provider == "openrouter" else "google/gemini-2.0-flash-exp"}"
+    api_key env.OPENROUTER_API_KEY
+    base_url "https://openrouter.ai/api/v1"
+  }}
+}}
 '''
             (baml_src_dir / "clients.baml").write_text(clients_content)
             
@@ -286,6 +311,6 @@ client<llm> MyAnthropic {
             shutil.rmtree(self.project_dir)
 
 
-def _temporary_baml_project(baml_code: str, function_name: str):
+def _temporary_baml_project(baml_code: str, function_name: str, options: Optional[ProviderOptions] = None):
     """Create a temporary BAML project context manager."""
-    return _TemporaryBAMLProject(baml_code, function_name) 
+    return _TemporaryBAMLProject(baml_code, function_name, options) 

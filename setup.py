@@ -27,11 +27,11 @@ setup(
     description="A Python library for structured data extraction from text using Large Language Models with dynamically generated schemas",
     long_description=read_readme(),
     long_description_content_type="text/markdown",
-    url="https://github.com/yourusername/dynamic_baml",
+    url="https://github.com/roboalchemist/dynamic-baml",
     project_urls={
-        "Bug Tracker": "https://github.com/yourusername/dynamic_baml/issues",
+        "Bug Tracker": "https://github.com/roboalchemist/dynamic-baml/issues",
         "Documentation": "https://dynamic-baml.readthedocs.io/",
-        "Source Code": "https://github.com/yourusername/dynamic_baml",
+        "Source Code": "https://github.com/roboalchemist/dynamic-baml",
     },
     packages=find_packages(),
     classifiers=[

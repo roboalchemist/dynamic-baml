@@ -44,7 +44,7 @@ class OllamaProvider(LLMProvider):
         
     def call(self, prompt: str, options: ProviderOptions) -> str:
         """Execute LLM call through Ollama API."""
-        model = options.get("model", "gemma3:1b")
+        model = options.get("model", "gemma2:2b")
         timeout = options.get("timeout", 120)
         
         try:
