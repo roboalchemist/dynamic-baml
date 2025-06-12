@@ -49,7 +49,7 @@ def call_with_schema(
         DynamicBAMLError: For any errors during processing
     """
     if options is None:
-        options = {"provider": "ollama", "model": "gemma2:2b"}
+        options = {"provider": "ollama", "model": "gemma3:1b"}
     
     try:
         # Generate unique schema name

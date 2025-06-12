@@ -28,7 +28,7 @@ class TestIntegrationOllamaGemma3(TestCase):
         """Set up class-level fixtures and check if Ollama is available."""
         cls.ollama_options = {
             "provider": "ollama",
-            "model": "gemma2:2b",
+            "model": "gemma3:1b",
             "temperature": 0.1,
             "timeout": 60
         }
