@@ -14,7 +14,7 @@ from .exceptions import (
 )
 from .types import SchemaDict, ResponseData, ProviderOptions
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 __all__ = [
     # Main interface
     "call_with_schema",

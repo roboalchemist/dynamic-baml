@@ -21,7 +21,7 @@ def read_requirements():
 
 setup(
     name="dynamic_baml",
-    version="0.1.0",
+    version="0.1.1",
     author="Dynamic BAML Team",
     author_email="contact@dynamic-baml.com",
     description="A Python library for structured data extraction from text using Large Language Models with dynamically generated schemas",
