@@ -13,32 +13,36 @@
 # flake8: noqa: E501,F401
 # pylint: disable=unused-import,line-too-long
 # fmt: off
-import baml_py
+from pydantic import BaseModel, ConfigDict
+from typing import List, Optional, Union
 from enum import Enum
 
-from pydantic import BaseModel, ConfigDict
 
-from typing_extensions import TypeAlias, Literal
+from typing_extensions import TypeAlias, Literal, TypedDict
 from typing import Dict, Generic, List, Optional, TypeVar, Union
 
 from . import types
 from .types import Checked, Check
 
-###############################################################################
-#
-#  These types are used for streaming, for when an instance of a type
-#  is still being built up and any of its fields is not yet fully available.
-#
-###############################################################################
 
 T = TypeVar('T')
 class StreamState(BaseModel, Generic[T]):
     value: T
     state: Literal["Pending", "Incomplete", "Complete"]
 
-
 class Resume(BaseModel):
     name: Optional[str] = None
     email: Optional[str] = None
-    experience: List[str]
+    experience: List['Experience']
     skills: List[str]
+
+class Experience(BaseModel):
+    company: Optional[str] = None
+    title: Optional[str] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+
+Resume.model_rebuild()
+Experience.model_rebuild()
+
+__all__ = ['Resume', 'Experience']

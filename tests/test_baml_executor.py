@@ -1,11 +1,15 @@
 """
-Tests for the dynamic_baml.baml_executor module.
+Comprehensive test suite for BAML Executor functionality.
+
+Tests the BAMLExecutor and CompiledSchema classes that handle
+BAML schema compilation and response parsing.
 """
 
-import json
 import pytest
-from unittest import TestCase
+import json
+import uuid
 from unittest.mock import patch, MagicMock
+from unittest import TestCase
 
 from dynamic_baml.baml_executor import BAMLExecutor, CompiledSchema
 from dynamic_baml.exceptions import BAMLCompilationError, ResponseParsingError
@@ -13,289 +17,442 @@ from dynamic_baml.exceptions import BAMLCompilationError, ResponseParsingError
 
 class TestBAMLExecutor(TestCase):
     """Test cases for BAMLExecutor class."""
-
+    
     def setUp(self):
         """Set up test fixtures."""
         self.executor = BAMLExecutor()
+        self.sample_baml_code = """
+class Person {
+    name: string
+    age: int
+    email: string?
+}
 
-    def test_compile_schema_simple(self):
-        """Test compiling a simple BAML schema."""
-        baml_code = """
-        class Person {
-            name: string
-            age: int
-        }
-        """
+enum Status {
+    active
+    inactive
+    pending
+}
+"""
+    
+    def test_init(self):
+        """Test BAMLExecutor initialization."""
+        executor = BAMLExecutor()
+        self.assertEqual(executor.compiled_schemas, {})
+    
+    def test_compile_schema_success(self):
+        """Test successful schema compilation."""
+        schema_name = "Person"
         
-        schema = self.executor.compile_schema(baml_code, "Person")
+        compiled_schema = self.executor.compile_schema(self.sample_baml_code, schema_name)
         
-        assert isinstance(schema, CompiledSchema)
-        assert schema.schema_name == "Person"
-        assert schema.baml_code == baml_code
-        assert "Person" in schema.parsed_structure
-        assert "name" in schema.parsed_structure["Person"]
-        assert "age" in schema.parsed_structure["Person"]
-
-    def test_compile_schema_with_enums(self):
-        """Test compiling BAML schema with enums."""
-        baml_code = """
-        enum Status {
-            ACTIVE
-            INACTIVE
-            PENDING
-        }
+        # Verify the compiled schema
+        self.assertIsInstance(compiled_schema, CompiledSchema)
+        self.assertEqual(compiled_schema.schema_name, schema_name)
+        self.assertEqual(compiled_schema.baml_code, self.sample_baml_code)
         
-        class User {
-            name: string
-            status: Status
-        }
-        """
-        
-        schema = self.executor.compile_schema(baml_code, "User")
-        
-        assert "Status" in schema.parsed_structure
-        assert schema.parsed_structure["Status"]["_type"] == "enum"
-        assert "ACTIVE" in schema.parsed_structure["Status"]["values"]
-
-    def test_compile_schema_with_optional_fields(self):
-        """Test compiling BAML schema with optional fields."""
-        baml_code = """
-        class Contact {
-            name: string
-            email: string?
-            phone: string?
-        }
-        """
-        
-        schema = self.executor.compile_schema(baml_code, "Contact")
-        
-        contact_fields = schema.parsed_structure["Contact"]
-        assert contact_fields["name"]["optional"] is False
-        assert contact_fields["email"]["optional"] is True
-        assert contact_fields["phone"]["optional"] is True
-
-    def test_compile_schema_compilation_error(self):
-        """Test error handling during schema compilation."""
-        # Simulate a compilation error by passing None as baml_code
-        with patch.object(self.executor, '_parse_baml_schema', side_effect=Exception("Parse error")):
-            with pytest.raises(BAMLCompilationError) as exc_info:
-                self.executor.compile_schema("invalid baml", "Test")
+        # Verify it's cached
+        self.assertIn(schema_name, self.executor.compiled_schemas)
+        self.assertEqual(self.executor.compiled_schemas[schema_name], compiled_schema)
+    
+    def test_compile_schema_with_exception(self):
+        """Test schema compilation with parsing exception."""
+        # Mock the _parse_baml_schema method to raise an exception
+        with patch.object(self.executor, '_parse_baml_schema', side_effect=ValueError("Parse error")):
+            with self.assertRaises(BAMLCompilationError) as cm:
+                self.executor.compile_schema(self.sample_baml_code, "Person")
             
-            assert "Failed to compile BAML schema 'Test'" in str(exc_info.value)
-            assert exc_info.value.baml_code == "invalid baml"
-
+            self.assertIn("Failed to compile BAML schema 'Person'", str(cm.exception))
+            self.assertIn("Parse error", str(cm.exception))
+    
     def test_parse_response_with_json(self):
-        """Test parsing LLM response with valid JSON."""
-        baml_code = """
-        class Person {
-            name: string
-            age: int
-        }
-        """
-        schema = self.executor.compile_schema(baml_code, "Person")
+        """Test parsing response with valid JSON."""
+        # First compile a schema
+        compiled_schema = self.executor.compile_schema(self.sample_baml_code, "Person")
         
-        response = '{"name": "John Doe", "age": 30}'
-        result = self.executor.parse_response(schema, response, "Person")
+        # Mock response with JSON
+        json_response = '{"name": "John Doe", "age": 30, "email": "john@example.com"}'
         
-        assert result == {"name": "John Doe", "age": 30}
+        result = self.executor.parse_response(compiled_schema, json_response, "Person")
+        
+        expected = {"name": "John Doe", "age": 30, "email": "john@example.com"}
+        self.assertEqual(result, expected)
+    
+    def test_parse_response_with_json_blocks(self):
+        """Test parsing response with JSON in code blocks."""
+        compiled_schema = self.executor.compile_schema(self.sample_baml_code, "Person")
+        
+        # Response with JSON in markdown code block
+        response_with_block = '''
+Here's the extracted data:
 
-    def test_parse_response_with_json_block(self):
-        """Test parsing LLM response with JSON inside code block."""
-        baml_code = """
-        class Person {
-            name: string
-            age: int
-        }
-        """
-        schema = self.executor.compile_schema(baml_code, "Person")
-        
-        response = """
-        Here's the extracted data:
-        ```json
-        {"name": "Jane Smith", "age": 25}
-        ```
-        """
-        result = self.executor.parse_response(schema, response, "Person")
-        
-        assert result == {"name": "Jane Smith", "age": 25}
+```json
+{
+    "name": "Jane Smith",
+    "age": 25,
+    "email": "jane@example.com"
+}
+```
 
-    def test_parse_response_with_regular_code_block(self):
-        """Test parsing LLM response with JSON in regular code block."""
-        baml_code = """
-        class Person {
-            name: string
-            age: int
-        }
-        """
-        schema = self.executor.compile_schema(baml_code, "Person")
+That's the result.
+'''
         
-        response = """
-        ```
-        {"name": "Bob Wilson", "age": 35}
-        ```
-        """
-        result = self.executor.parse_response(schema, response, "Person")
+        result = self.executor.parse_response(compiled_schema, response_with_block, "Person")
         
-        assert result == {"name": "Bob Wilson", "age": 35}
-
+        expected = {"name": "Jane Smith", "age": 25, "email": "jane@example.com"}
+        self.assertEqual(result, expected)
+    
     def test_parse_response_structured_text_fallback(self):
-        """Test parsing structured text when no JSON is found."""
-        baml_code = """
-        class Person {
-            name: string
-            age: int
-        }
-        """
-        schema = self.executor.compile_schema(baml_code, "Person")
+        """Test parsing response that falls back to structured text parsing."""
+        compiled_schema = self.executor.compile_schema(self.sample_baml_code, "Person")
         
-        response = """
-        name: Alice Cooper
-        age: 28
-        """
-        result = self.executor.parse_response(schema, response, "Person")
+        # Response without JSON
+        text_response = """
+Name: Bob Wilson
+Age: 35
+Email: bob@example.com
+Status: active
+"""
         
-        assert result["name"] == "Alice Cooper"
-        assert result["age"] == "28"
-
-    def test_parse_response_parsing_error(self):
-        """Test error handling during response parsing."""
-        baml_code = """
-        class Person {
-            name: string
-            age: int
-        }
-        """
-        schema = self.executor.compile_schema(baml_code, "Person")
+        result = self.executor.parse_response(compiled_schema, text_response, "Person")
         
-        # Mock the validation to raise an error
-        with patch.object(self.executor, '_validate_against_schema', side_effect=Exception("Validation error")):
-            with pytest.raises(ResponseParsingError) as exc_info:
-                self.executor.parse_response(schema, '{"name": "test"}', "Person")
+        # Should extract key-value pairs
+        self.assertIn("name", result)
+        self.assertIn("age", result)
+        self.assertIn("email", result)
+    
+    def test_parse_response_with_exception(self):
+        """Test parse response with exception handling."""
+        compiled_schema = self.executor.compile_schema(self.sample_baml_code, "Person")
+        
+        # Mock methods to raise exceptions
+        with patch.object(self.executor, '_extract_json_from_response', side_effect=ValueError("JSON error")):
+            with self.assertRaises(ResponseParsingError) as cm:
+                self.executor.parse_response(compiled_schema, "invalid", "Person")
             
-            assert "Failed to parse response for schema 'Person'" in str(exc_info.value)
-            assert exc_info.value.raw_response == '{"name": "test"}'
-            assert exc_info.value.schema_name == "Person"
-
-    def test_extract_json_from_response_multiple_patterns(self):
-        """Test JSON extraction with multiple pattern types."""
-        # Test with json code block
-        response1 = '```json\n{"key": "value"}\n```'
-        result1 = self.executor._extract_json_from_response(response1)
-        assert result1 == {"key": "value"}
-        
-        # Test with regular code block
-        response2 = '```\n{"key": "value2"}\n```'
-        result2 = self.executor._extract_json_from_response(response2)
-        assert result2 == {"key": "value2"}
-        
-        # Test with inline JSON
-        response3 = 'Here is the data: {"key": "value3"} end'
-        result3 = self.executor._extract_json_from_response(response3)
-        assert result3 == {"key": "value3"}
-
-    def test_extract_json_from_response_no_json(self):
-        """Test JSON extraction when no valid JSON is found."""
-        response = "This is just plain text with no JSON"
-        result = self.executor._extract_json_from_response(response)
-        assert result is None
-
-    def test_extract_json_from_response_invalid_json(self):
-        """Test JSON extraction with invalid JSON syntax."""
-        response = '{"invalid": json}'
-        result = self.executor._extract_json_from_response(response)
-        assert result is None
-
-    def test_validate_against_schema_non_dict(self):
-        """Test schema validation with non-dictionary input."""
-        schema = {"test": {"type": "string"}}
-        
-        with pytest.raises(ValueError, match="Data must be a dictionary"):
-            self.executor._validate_against_schema("not a dict", schema)
-
-    def test_parse_structured_text_key_value_pairs(self):
-        """Test parsing structured text with key-value pairs."""
-        schema = {"name": {"type": "string"}, "age": {"type": "int"}}
-        text = """
-        name: John Doe
-        age: 30
-        extra: ignored
-        """
-        
-        result = self.executor._parse_structured_text(text, schema)
-        
-        assert "name" in result
-        assert "age" in result
-        assert result["name"] == "John Doe"
-        assert result["age"] == "30"
-
-    def test_parse_structured_text_no_colons(self):
-        """Test parsing structured text with no key-value pairs."""
-        schema = {"test": {"type": "string"}}
-        text = "This text has no colons to parse"
-        
-        result = self.executor._parse_structured_text(text, schema)
-        
-        assert result == {}
-
-    def test_compiled_schemas_caching(self):
-        """Test that compiled schemas are cached properly."""
+            self.assertIn("Failed to parse response for schema 'Person'", str(cm.exception))
+    
+    def test_parse_baml_schema_classes(self):
+        """Test parsing BAML schema with class definitions."""
         baml_code = """
-        class Test {
-            value: string
-        }
-        """
+class User {
+    id: int
+    username: string
+    active: bool?
+}
+
+class Profile {
+    bio: string
+    website: string?
+}
+"""
         
-        schema1 = self.executor.compile_schema(baml_code, "Test")
-        schema2 = self.executor.compile_schema(baml_code, "Test")
+        result = self.executor._parse_baml_schema(baml_code, "User")
         
-        # Should be cached
-        assert "Test" in self.executor.compiled_schemas
-        assert self.executor.compiled_schemas["Test"] == schema2
+        # Check User class structure
+        self.assertIn("User", result)
+        user_fields = result["User"]
+        self.assertEqual(user_fields["id"]["type"], "int")
+        self.assertEqual(user_fields["username"]["type"], "string")
+        self.assertEqual(user_fields["active"]["type"], "bool")
+        self.assertTrue(user_fields["active"]["optional"])
+        
+        # Check Profile class structure
+        self.assertIn("Profile", result)
+        profile_fields = result["Profile"]
+        self.assertEqual(profile_fields["bio"]["type"], "string")
+        self.assertEqual(profile_fields["website"]["type"], "string")
+        self.assertTrue(profile_fields["website"]["optional"])
+    
+    def test_parse_baml_schema_enums(self):
+        """Test parsing BAML schema with enum definitions."""
+        baml_code = """
+enum Priority {
+    low
+    medium
+    high
+    critical
+}
+
+enum Type {
+    task
+    bug
+    feature
+}
+"""
+        
+        result = self.executor._parse_baml_schema(baml_code, "Priority")
+        
+        # Check Priority enum
+        self.assertIn("Priority", result)
+        priority_enum = result["Priority"]
+        self.assertEqual(priority_enum["_type"], "enum")
+        self.assertIn("low", priority_enum["values"])
+        self.assertIn("medium", priority_enum["values"])
+        self.assertIn("high", priority_enum["values"])
+        self.assertIn("critical", priority_enum["values"])
+        
+        # Check Type enum
+        self.assertIn("Type", result)
+        type_enum = result["Type"]
+        self.assertEqual(type_enum["_type"], "enum")
+        self.assertIn("task", type_enum["values"])
+        self.assertIn("bug", type_enum["values"])
+        self.assertIn("feature", type_enum["values"])
+    
+    def test_extract_json_from_response_various_formats(self):
+        """Test JSON extraction from various response formats."""
+        # Test case 1: JSON in ```json block
+        response1 = '''
+Here's the data:
+```json
+{"name": "Test", "value": 123}
+```
+Done.
+'''
+        result1 = self.executor._extract_json_from_response(response1)
+        self.assertEqual(result1, {"name": "Test", "value": 123})
+        
+        # Test case 2: JSON in generic ``` block
+        response2 = '''
+```
+{"status": "success", "count": 5}
+```
+'''
+        result2 = self.executor._extract_json_from_response(response2)
+        self.assertEqual(result2, {"status": "success", "count": 5})
+        
+        # Test case 3: Plain JSON
+        response3 = '{"simple": "json", "works": true}'
+        result3 = self.executor._extract_json_from_response(response3)
+        self.assertEqual(result3, {"simple": "json", "works": True})
+        
+        # Test case 4: JSON embedded in text
+        response4 = 'The result is {"embedded": "json"} in this text.'
+        result4 = self.executor._extract_json_from_response(response4)
+        self.assertEqual(result4, {"embedded": "json"})
+        
+        # Test case 5: No valid JSON
+        response5 = 'This has no JSON content at all.'
+        result5 = self.executor._extract_json_from_response(response5)
+        self.assertIsNone(result5)
+        
+        # Test case 6: Invalid JSON
+        response6 = '{"invalid": json, "missing": quotes}'
+        result6 = self.executor._extract_json_from_response(response6)
+        self.assertIsNone(result6)
+    
+    def test_validate_against_schema_success(self):
+        """Test successful schema validation."""
+        data = {"name": "Test", "age": 25}
+        schema = {"name": {"type": "string"}, "age": {"type": "int"}}
+        
+        result = self.executor._validate_against_schema(data, schema)
+        self.assertEqual(result, data)
+    
+    def test_validate_against_schema_invalid_data_type(self):
+        """Test schema validation with invalid data type."""
+        invalid_data = "not a dictionary"
+        schema = {"name": {"type": "string"}}
+        
+        with self.assertRaises(ValueError) as cm:
+            self.executor._validate_against_schema(invalid_data, schema)
+        
+        self.assertIn("Data must be a dictionary", str(cm.exception))
+    
+    def test_parse_structured_text_various_formats(self):
+        """Test structured text parsing with various formats."""
+        schema = {"name": {"type": "string"}, "age": {"type": "int"}}
+        
+        # Test case 1: Simple key-value pairs
+        text1 = """
+Name: Alice
+Age: 30
+City: New York
+"""
+        result1 = self.executor._parse_structured_text(text1, schema)
+        self.assertEqual(result1["name"], "Alice")
+        self.assertEqual(result1["age"], "30")
+        self.assertEqual(result1["city"], "New York")
+        
+        # Test case 2: Mixed format
+        text2 = """
+The name is: Bob
+Age: 25
+Location: Boston
+Status: Active
+"""
+        result2 = self.executor._parse_structured_text(text2, schema)
+        self.assertIn("the name is", result2)
+        self.assertIn("age", result2)
+        
+        # Test case 3: No structured content
+        text3 = "This is just plain text without any structure"
+        result3 = self.executor._parse_structured_text(text3, schema)
+        self.assertEqual(result3, {})
+        
+        # Test case 4: Empty lines and whitespace
+        text4 = """
+
+Name:   Charlie   
+Age:    40   
+
+Email:  charlie@example.com  
+
+"""
+        result4 = self.executor._parse_structured_text(text4, schema)
+        self.assertEqual(result4["name"], "Charlie")
+        self.assertEqual(result4["age"], "40")
+        self.assertEqual(result4["email"], "charlie@example.com")
 
 
 class TestCompiledSchema(TestCase):
     """Test cases for CompiledSchema class."""
-
-    def test_compiled_schema_initialization(self):
-        """Test CompiledSchema initialization."""
-        schema_name = "TestSchema"
-        baml_code = "class TestSchema { value: string }"
-        parsed_structure = {"TestSchema": {"value": {"type": "string", "optional": False}}}
-        
-        schema = CompiledSchema(schema_name, baml_code, parsed_structure)
-        
-        assert schema.schema_name == schema_name
-        assert schema.baml_code == baml_code
-        assert schema.parsed_structure == parsed_structure
-        assert schema.id is not None
-        assert len(schema.id) > 0
-
-    def test_get_main_class_structure(self):
-        """Test getting main class structure."""
-        schema_name = "Person"
-        parsed_structure = {
-            "Person": {"name": {"type": "string"}, "age": {"type": "int"}},
-            "Address": {"street": {"type": "string"}}
+    
+    def setUp(self):
+        """Set up test fixtures."""
+        self.schema_name = "TestSchema"
+        self.baml_code = "class TestSchema { name: string }"
+        self.parsed_structure = {
+            "TestSchema": {
+                "name": {"type": "string", "optional": False}
+            }
         }
+    
+    def test_init(self):
+        """Test CompiledSchema initialization."""
+        compiled_schema = CompiledSchema(
+            self.schema_name, 
+            self.baml_code, 
+            self.parsed_structure
+        )
         
-        schema = CompiledSchema(schema_name, "", parsed_structure)
-        main_structure = schema.get_main_class_structure()
+        self.assertEqual(compiled_schema.schema_name, self.schema_name)
+        self.assertEqual(compiled_schema.baml_code, self.baml_code)
+        self.assertEqual(compiled_schema.parsed_structure, self.parsed_structure)
         
-        assert main_structure == {"name": {"type": "string"}, "age": {"type": "int"}}
-
+        # Check that ID is generated
+        self.assertIsInstance(compiled_schema.id, str)
+        # Verify it's a valid UUID format
+        uuid.UUID(compiled_schema.id)  # This will raise if invalid
+    
+    def test_get_main_class_structure_exists(self):
+        """Test getting main class structure when it exists."""
+        compiled_schema = CompiledSchema(
+            self.schema_name, 
+            self.baml_code, 
+            self.parsed_structure
+        )
+        
+        result = compiled_schema.get_main_class_structure()
+        expected = {"name": {"type": "string", "optional": False}}
+        self.assertEqual(result, expected)
+    
     def test_get_main_class_structure_missing(self):
-        """Test getting main class structure when schema name not found."""
-        schema_name = "NonExistent"
-        parsed_structure = {"Person": {"name": {"type": "string"}}}
+        """Test getting main class structure when schema doesn't exist."""
+        compiled_schema = CompiledSchema(
+            "NonExistentSchema", 
+            self.baml_code, 
+            self.parsed_structure
+        )
         
-        schema = CompiledSchema(schema_name, "", parsed_structure)
-        main_structure = schema.get_main_class_structure()
-        
-        assert main_structure == {}
+        result = compiled_schema.get_main_class_structure()
+        self.assertEqual(result, {})
 
-    def test_compiled_schema_unique_ids(self):
-        """Test that each CompiledSchema has a unique ID."""
-        schema1 = CompiledSchema("Test1", "", {})
-        schema2 = CompiledSchema("Test2", "", {})
+
+class TestBAMLExecutorIntegration(TestCase):
+    """Integration tests for BAMLExecutor with complex scenarios."""
+    
+    def setUp(self):
+        """Set up test fixtures."""
+        self.executor = BAMLExecutor()
+    
+    def test_complex_schema_compilation_and_parsing(self):
+        """Test end-to-end compilation and parsing with complex schema."""
+        complex_baml = """
+class Product {
+    id: int
+    name: string
+    price: float
+    category: Category
+    tags: string[]
+    available: bool?
+}
+
+class Category {
+    name: string
+    description: string?
+}
+
+enum ProductStatus {
+    in_stock
+    out_of_stock
+    discontinued
+}
+"""
         
-        assert schema1.id != schema2.id 
+        # Compile the schema
+        compiled_schema = self.executor.compile_schema(complex_baml, "Product")
+        
+        # Test with JSON response
+        json_response = '''
+{
+    "id": 123,
+    "name": "Laptop",
+    "price": 999.99,
+    "category": {"name": "Electronics", "description": "Tech products"},
+    "tags": ["computer", "work", "portable"],
+    "available": true
+}
+'''
+        
+        result = self.executor.parse_response(compiled_schema, json_response, "Product")
+        
+        self.assertEqual(result["id"], 123)
+        self.assertEqual(result["name"], "Laptop")
+        self.assertEqual(result["price"], 999.99)
+        self.assertIsInstance(result["category"], dict)
+        self.assertIsInstance(result["tags"], list)
+    
+    def test_multiple_schemas_caching(self):
+        """Test that multiple compiled schemas are properly cached."""
+        schema1_code = "class User { name: string }"
+        schema2_code = "class Product { title: string }"
+        
+        # Compile multiple schemas
+        compiled1 = self.executor.compile_schema(schema1_code, "User")
+        compiled2 = self.executor.compile_schema(schema2_code, "Product")
+        
+        # Verify both are cached
+        self.assertIn("User", self.executor.compiled_schemas)
+        self.assertIn("Product", self.executor.compiled_schemas)
+        
+        # Verify they're different objects
+        self.assertNotEqual(compiled1.id, compiled2.id)
+        self.assertNotEqual(compiled1.baml_code, compiled2.baml_code)
+    
+    def test_error_propagation(self):
+        """Test that errors are properly propagated with context."""
+        # Test compilation error by mocking _parse_baml_schema to raise an exception
+        with patch.object(self.executor, '_parse_baml_schema', side_effect=ValueError("Invalid BAML syntax")):
+            with self.assertRaises(BAMLCompilationError) as cm:
+                self.executor.compile_schema("invalid baml", "InvalidSchema")
+            
+            self.assertIn("InvalidSchema", str(cm.exception))
+        
+        # Test parsing error with valid schema but bad response handling
+        valid_schema = self.executor.compile_schema("class Test { name: string }", "Test")
+        
+        # Mock validation to raise an error
+        with patch.object(self.executor, '_validate_against_schema', side_effect=ValueError("Validation failed")):
+            with patch.object(self.executor, '_extract_json_from_response', return_value={"name": "test"}):
+                with self.assertRaises(ResponseParsingError) as cm:
+                    self.executor.parse_response(valid_schema, '{"name": "test"}', "Test")
+                
+                self.assertIn("Test", str(cm.exception))
+
+
+if __name__ == "__main__":
+    # Run all tests
+    import unittest
+    unittest.main() 

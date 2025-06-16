@@ -28,6 +28,8 @@ class ProviderOptions(TypedDict):
     base_url: NotRequired[str]  # For Ollama
     api_key: NotRequired[str]   # For OpenRouter
     timeout: NotRequired[int]   # Request timeout in seconds
+    log_level: NotRequired[Literal["off", "error", "warn", "info", "debug", "trace"]]  # BAML log level
+    log_file: NotRequired[str]  # Log output file path (default: None - terminal only)
 
 # Enum field definition
 class EnumFieldDef(TypedDict):

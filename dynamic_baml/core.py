@@ -23,6 +23,71 @@ from .types import SchemaDict, ResponseData, ProviderOptions, CallResult
 from .schema_generator import DictToBAMLGenerator
 
 
+def _configure_logging(options: ProviderOptions) -> None:
+    """Configure BAML logging based on provider options."""
+    try:
+        from .baml.config import set_log_level
+        
+        # Set log level if specified
+        log_level = options.get("log_level")
+        if log_level:
+            set_log_level(log_level)
+        
+        # Handle log file output if specified
+        log_file = options.get("log_file")
+        if log_file:
+            # Set environment variable to redirect BAML logs to file
+            # Note: This approach uses shell redirection concept
+            # BAML itself logs to stdout/stderr, so we'll set up a custom handler
+            _setup_log_file_redirect(log_file)
+            
+    except ImportError:
+        # If baml config is not available, ignore logging configuration
+        pass
+    except Exception as e:
+        # Don't fail the main operation if logging configuration fails
+        print(f"Warning: Failed to configure logging: {e}")
+
+
+def _setup_log_file_redirect(log_file: str) -> None:
+    """Set up log file redirection for BAML logging."""
+    import logging
+    import sys
+    from pathlib import Path
+    
+    try:
+        # Create log file directory if it doesn't exist
+        log_path = Path(log_file)
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Create a custom log handler that captures stdout/stderr for BAML
+        class BAMLLogHandler(logging.Handler):
+            def __init__(self, log_file: str):
+                super().__init__()
+                self.log_file = log_file
+                self.file_handle = open(log_file, 'a', encoding='utf-8')
+                
+            def emit(self, record):
+                try:
+                    msg = self.format(record)
+                    self.file_handle.write(f"{msg}\n")
+                    self.file_handle.flush()
+                except Exception:
+                    pass
+                    
+            def close(self):
+                if hasattr(self, 'file_handle'):
+                    self.file_handle.close()
+                super().close()
+        
+        # Set up environment variable to indicate log file location
+        # This can be used by other parts of the application
+        os.environ['DYNAMIC_BAML_LOG_FILE'] = log_file
+        
+    except Exception as e:
+        print(f"Warning: Could not set up log file redirect to {log_file}: {e}")
+
+
 def call_with_schema(
     prompt_text: str,
     schema_dict: SchemaDict,
@@ -50,6 +115,9 @@ def call_with_schema(
     """
     if options is None:
         options = {"provider": "ollama", "model": "gemma3:1b"}
+    
+    # Configure logging based on options
+    _configure_logging(options)
     
     try:
         # Generate unique schema name
@@ -108,6 +176,12 @@ def call_with_schema_safe(
     Returns:
         CallResult with success flag and either data or error information
     """
+    if options is None:
+        options = {"provider": "ollama", "model": "gemma3:1b"}
+    
+    # Configure logging based on options
+    _configure_logging(options)
+    
     try:
         data = call_with_schema(prompt_text, schema_dict, options)
         return {

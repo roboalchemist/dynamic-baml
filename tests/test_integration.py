@@ -12,21 +12,22 @@ import pytest
 import json
 import time
 from unittest import TestCase
-
+import unittest
 from dynamic_baml import call_with_schema, call_with_schema_safe
 from dynamic_baml.exceptions import (
     DynamicBAMLError, LLMProviderError, TimeoutError
 )
 from dynamic_baml.providers import LLMProviderFactory
+from dynamic_baml.baml_executor import BAMLExecutor
+from dynamic_baml.types import ProviderOptions
 
 
-class TestIntegrationOllamaGemma3(TestCase):
+class TestIntegrationOllamaGemma3(unittest.TestCase):
     """Integration tests with actual Ollama Gemma3:1b model."""
 
-    @classmethod
-    def setUpClass(cls):
-        """Set up class-level fixtures and check if Ollama is available."""
-        cls.ollama_options = {
+    def setUp(self):
+        """Set up instance-level fixtures and check if Ollama is available."""
+        self.ollama_options = {
             "provider": "ollama",
             "model": "gemma3:1b",
             "temperature": 0.1,
@@ -36,7 +37,7 @@ class TestIntegrationOllamaGemma3(TestCase):
         # Check if Ollama is available
         factory = LLMProviderFactory()
         try:
-            provider = factory.create_provider(cls.ollama_options)
+            provider = factory.create_provider(self.ollama_options)
             if not provider.is_available():
                 pytest.skip("Ollama is not running - skipping integration tests")
         except Exception as e:
@@ -400,6 +401,20 @@ class TestIntegrationOllamaGemma3(TestCase):
         # At least some consistency in extracted values
         self.assertTrue(len(set(cities)) <= 2)  # Should be similar city names
         self.assertTrue(len(set(categories)) <= 2)  # Should be similar categorizations
+
+    @pytest.mark.integration
+    def test_model_availability_check_with_non_existent_model(self):
+        """Test checking if the gemma3:1b model is actually available with a non-existent model."""
+        factory = LLMProviderFactory()
+        provider = factory.create_provider(self.ollama_options)
+        
+        # Test with a non-existent model
+        with self.assertRaises(LLMProviderError) as context:
+            provider.call(
+                "Say 'Hello World'",
+                {"provider": "ollama", "model": "non-existent-model-xyz"}
+            )
+        self.assertIn("model 'non-existent-model-xyz' not found", str(context.exception))
 
 
 if __name__ == "__main__":

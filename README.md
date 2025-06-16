@@ -54,6 +54,7 @@ print(result)
 - [Core Concepts](#core-concepts)
 - [Schema Types](#schema-types)
 - [Provider Configuration](#provider-configuration)
+- [Logging](#logging)
 - [Advanced Usage](#advanced-usage)
 - [Error Handling](#error-handling)
 - [Examples](#examples)
@@ -236,6 +237,99 @@ options = {
     "temperature": 0.1,
     "max_tokens": 2000,
     "timeout": 60
+}
+```
+
+## 🪵 Logging
+
+Dynamic BAML provides flexible logging options to control output verbosity and destination.
+
+### Quick Start
+
+```python
+from dynamic_baml import call_with_schema
+
+# Basic usage with logging to file
+options = {
+    "provider": "openai",
+    "model": "gpt-4",
+    "log_level": "info",           # Control verbosity  
+    "log_file": "./baml.log"       # Output to file
+}
+
+result = call_with_schema(prompt, schema, options)
+```
+
+### Configuration Options
+
+#### Log Levels
+
+Control the verbosity of BAML logging output:
+
+| Level | Description | Use Case |
+|-------|-------------|----------|
+| `"off"` | No logging output | Production where logs aren't needed |
+| `"error"` | Only fatal errors | Production minimal logging |
+| `"warn"` | Errors and warnings (default) | Standard production logging |
+| `"info"` | Detailed execution info | Development and debugging |
+| `"debug"` | Verbose details and requests | Deep debugging |
+| `"trace"` | Everything (very verbose) | Troubleshooting |
+
+#### Log File Output
+
+Specify where logs should be written:
+
+- **Default (no `log_file`)**: Logs go to terminal/stdout
+- **File path**: Logs written to specified file
+- **Directory creation**: Parent directories created automatically
+- **Append mode**: Multiple calls append to the same file
+
+### Usage Examples
+
+#### 1. Log Level Only (Terminal Output)
+
+```python
+options = {
+    "provider": "openai",
+    "log_level": "info"  # Logs to terminal with info level
+}
+```
+
+#### 2. Log File Only (Default Level)
+
+```python
+options = {
+    "provider": "openai", 
+    "log_file": "./logs/baml.log"  # Uses default log level
+}
+```
+
+#### 3. Both Level and File
+
+```python
+options = {
+    "provider": "openai",
+    "log_level": "debug",
+    "log_file": "/var/log/baml/debug.log"
+}
+```
+
+#### 4. Disable Logging Completely
+
+```python
+options = {
+    "provider": "openai",
+    "log_level": "off"  # No logging output at all
+}
+```
+
+#### 5. Nested Log Directories
+
+```python
+options = {
+    "provider": "openai",
+    "log_level": "info",
+    "log_file": "./logs/2024/january/extraction.log"  # Dirs created automatically
 }
 ```
 
