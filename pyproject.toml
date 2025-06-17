@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dynamic-baml"
-version = "0.1.2"
+version = "0.2.0"
 description = "A standalone library for dynamic BoundaryML schema generation and LLM response parsing"
 readme = "README.md"
 requires-python = ">=3.8"

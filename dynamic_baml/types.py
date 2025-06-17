@@ -4,6 +4,8 @@ Type definitions for the Dynamic BAML library.
 
 from typing import Any, Dict, List, Literal, Optional, Union
 from typing_extensions import TypedDict, NotRequired
+from pydantic import BaseModel
+import enum
 
 # Schema definition types
 SchemaFieldType = Union[
@@ -65,6 +67,12 @@ class CallResult(TypedDict):
 # Internal BAML generation context
 class BAMLContext(TypedDict):
     """Internal context for BAML generation."""
+    schema_name: str
+    schema_code: str
+    compiled: bool
+    client: NotRequired[Any]  # BAML client instance
+
+class BAMLContext(TypedDict):
     schema_name: str
     schema_code: str
     compiled: bool

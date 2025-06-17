@@ -224,13 +224,14 @@ class TestOpenRouterProvider(TestCase):
 
     def test_call_no_api_key(self):
         """Test error when no API key is provided."""
-        provider = OpenRouterProvider()
-        
-        with pytest.raises(LLMProviderError) as exc_info:
-            provider.call("Test prompt", {})
-
-        assert "OpenRouter API key not found" in str(exc_info.value)
-        assert exc_info.value.provider == "openrouter"
+        with patch.dict('os.environ', {}, clear=True):
+            provider = OpenRouterProvider()
+            
+            with pytest.raises(LLMProviderError) as exc_info:
+                provider.call("Test prompt", {})
+            
+            assert "OpenRouter API key not found" in str(exc_info.value)
+            assert exc_info.value.provider == "openrouter"
 
     @patch('httpx.Client')
     def test_call_with_custom_options(self, mock_client_class):
@@ -403,8 +404,9 @@ class TestOpenRouterProvider(TestCase):
 
     def test_is_available_without_api_key(self):
         """Test is_available returns False when API key is not configured."""
-        provider = OpenRouterProvider(None)
-        assert provider.is_available() is False
+        with patch.dict('os.environ', {}, clear=True):
+            provider = OpenRouterProvider(None)
+            assert provider.is_available() is False
 
     @patch.dict(os.environ, {"OPENROUTER_API_KEY": "env_api_key"})
     def test_api_key_from_environment(self):

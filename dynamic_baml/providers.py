@@ -101,7 +101,7 @@ class OpenRouterProvider(LLMProvider):
         
     def call(self, prompt: str, options: ProviderOptions) -> str:
         """Execute LLM call through OpenRouter API."""
-        model = options.get("model", "google/gemini-2.0-flash-exp")
+        model = options.get("model", "google/gemini-2.5-pro-preview")
         timeout = options.get("timeout", 120)
         
         if not self.api_key:

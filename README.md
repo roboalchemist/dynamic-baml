@@ -13,6 +13,7 @@ Define your desired output structure as a simple Python dictionary, and Dynamic 
 - 🔧 **Easy Integration**: Simple API with comprehensive error handling
 - 📊 **Complex Types**: Support for nested objects, enums, arrays, and optional fields
 - ⚡ **Performance**: Efficient temporary project management and cleanup
+- 🖼️ **Image Support**: Analyze images with vision models using BamlRuntime
 
 ## 🚀 Quick Start
 
@@ -456,6 +457,90 @@ See the [examples/](examples/) directory for comprehensive examples:
 - [Error Handling](examples/error_handling.py)
 - [Batch Processing](examples/batch_processing.py)
 - [Real-World Use Cases](examples/real_world.py)
+- [Image Analysis](examples/image_analysis.py) - **NEW!** Multimodal AI with vision models
+
+## 🖼️ Image Support (Experimental)
+
+Dynamic BAML supports image analysis through BamlRuntime for advanced multimodal use cases.
+
+### Current Limitations
+
+The main `call_with_schema` API currently supports text-only prompts. For actual image analysis, use BamlRuntime directly as shown below.
+
+### Image Analysis Example
+
+```python
+from baml_py import BamlRuntime, Image
+import base64
+
+# Convert image to base64
+def image_to_base64(image_path):
+    with open(image_path, 'rb') as f:
+        return base64.b64encode(f.read()).decode('utf-8')
+
+# Define BAML schema with image support
+baml_schema = """
+enum ObjectType {
+  Person
+  Animal
+  Vehicle
+  Building
+  Other
+}
+
+class ImageAnalysis {
+  primary_object ObjectType
+  description string
+  confidence float
+}
+
+function AnalyzeImage(image: image) -> ImageAnalysis {
+  client VisionModel
+  prompt #"
+    Analyze this image and identify the primary object.
+    Image: {{ image }}
+  "#
+}
+
+client<llm> VisionModel {
+  provider openai-generic
+  options {
+    model "gpt-4-vision-preview"
+    api_key env.OPENAI_API_KEY
+  }
+}
+"""
+
+# Create runtime and analyze image
+async def analyze_image(image_path):
+    runtime = BamlRuntime.from_files(
+        root_path=".",
+        files={"schema.baml": baml_schema}
+    )
+    
+    # Create image object
+    image_data = image_to_base64(image_path)
+    image = Image.from_base64("image/jpeg", image_data)
+    
+    # Call the function
+    ctx = runtime.create_context_manager()
+    result = await runtime.call_function(
+        "AnalyzeImage",
+        {"image": image},
+        ctx
+    )
+    
+    return result
+```
+
+### Supported Vision Models
+
+- **OpenAI**: GPT-4 Vision (`gpt-4-vision-preview`)
+- **Anthropic**: Claude 3 models with vision
+- **OpenRouter**: Google Gemini Vision, Claude 3, and others
+- **Ollama**: LLaVA and other local vision models
+
+For a complete example with multiple providers and fallback strategies, see [examples/image_analysis.py](examples/image_analysis.py).
 
 ## 📖 API Reference
 

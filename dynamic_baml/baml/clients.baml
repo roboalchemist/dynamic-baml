@@ -73,3 +73,27 @@ retry_policy Exponential {
     max_delay_ms 10000
   }
 }
+
+client<llm> OpenRouter {
+  provider openai-generic
+  options {
+    model "google/gemini-2.5-pro-preview"
+    api_key env.OPENROUTER_API_KEY
+    base_url "https://openrouter.ai/api/v1"
+  }
+}
+
+client<llm> Ollama {
+  provider openai-generic
+  options {
+    model "gemma3:4b"
+    base_url "http://localhost:11434/v1"
+  }
+}
+
+client<llm> ImageAnalysisClient {
+  provider fallback
+  options {
+    strategy [OpenRouter, Ollama]
+  }
+}
